@@ -1,0 +1,84 @@
+#!/bin/sh
+
+#
+# Copyright ©2018 sguerrini97
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+# title() and status() functions were copy-pasted from 
+# a T2 SDE init script <https://t2sde.org/>
+#
+
+title() {
+	local x w="$(stty size 2>/dev/null </dev/tty | cut -d" " -f2)"
+	[ -z "$w" ] && w="$(stty size </dev/console | cut -d" " -f2)"
+	printf "%0$((w/2-1))s" | sed "s/ / ./g"
+	echo -e "\e[255G\e[5D v  \r\e[36m$* \e[0m"
+	error=0
+}
+
+status() {
+	if [ $error -eq 0 ]
+	then
+		echo -e "\e[1A\e[255G\e[5D|\e[32m OK \e[0m|"
+	else
+		echo -e "\e[1A\e[255G\e[5D\a|\e[1;31mFAIL\e[0m|"
+	fi
+}
+
+case "$1" in
+
+	restart|start)
+		title "Syncing system time with PS3's hardware clock"
+		date +%s -s @`ps3dm srtc get_time 1` > /dev/null || error=$?;
+		status
+		;;
+
+	get)
+		title "Getting PS3's hardware clock time"
+		ps3rtc=`date -d @\`ps3dm srtc get_time 1\``
+		error=$?
+		status
+		if [ $error -eq 0 ]
+		then
+			echo $ps3rtc
+		fi
+		;;
+	set)
+		title "Setting PS3's hardware clock time"
+		case "$2" in 
+			''|*[!0-9]*)
+				error=1
+				status
+				;;
+
+			*)
+				# PS3's epoch time is 01/01/2000 
+				ps3timestamp=`date -d "\`date -d @${2}\` - 30 year" +%s`
+				ps3dm srtc set_time ${ps3timestamp} > /dev/null || error=$?;
+				status
+				;;
+		esac
+		;;
+
+	stop)
+		;;
+
+	*)
+		echo "Usage: $0 { start | get | set <unix timestamp> }"
+		exit 1
+		;;
+
+esac
+
+exit 0
+
